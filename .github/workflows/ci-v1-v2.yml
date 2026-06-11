@@ -1,0 +1,63 @@
+name: test-pkg-v1-v2
+
+on:
+  # For manual triggers
+  workflow_dispatch: null
+  push:
+    paths:
+      - 'test-pkg-v1-v2/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-test-pkg-v1-v2
+  cancel-in-progress: true
+
+env:
+  PROJECT_DIR: ./test-pkg-v1-v2
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test-pkg-v1-v2-ci:
+    runs-on:  ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }} # only applies to run in steps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read release JSON file
+        run: echo "RELEASE_JSON=$(jq -c . < release.json)" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true               # Speeds up dependency downloads
+
+      - name: Build Binary
+        working-directory:  ${{ fromJson(env.RELEASE_JSON).name }}
+        run: go build -v -o myapp main.go
+      - name: Create Tag
+        uses: actions/github-script@v9
+        with:
+          script: |
+            github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'refs/tags/${{ fromJson(env.RELEASE_JSON).name }}/v${{ fromJson(env.RELEASE_JSON).version }}',
+                sha: context.sha
+            })
+
+      - name: Create Release # Create Github Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: refs/tags/${{ fromJson(env.RELEASE_JSON).name }}/v${{ fromJson(env.RELEASE_JSON).version }}
+          release_name: ${{ fromJson(env.RELEASE_JSON).name }}/v${{ fromJson(env.RELEASE_JSON).version }}
+          draft: false
+          prerelease: false

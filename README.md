@@ -1,2 +1,2 @@
 # test-mono-go
-just testing
+This is a mono repo with test golang projects
